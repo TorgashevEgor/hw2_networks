@@ -32,13 +32,15 @@ class DNSRequest:
 
         self.domain_name, name_end_offset = self._parse_domain_name(raw_data, 12)
 
-        self.qtype, self.qclass = struct.unpack("!HH", raw_data[name_end_offset:name_end_offset + 4])
+        self.qtype, self.qclass = struct.unpack(
+            "!HH", raw_data[name_end_offset : name_end_offset + 4]
+        )
         self.question_end = name_end_offset + 4
 
         if self.qtype != 1 or self.qclass != 1:
             raise DNSValidationError(4)
 
-        self.question_section = raw_data[12:self.question_end]
+        self.question_section = raw_data[12 : self.question_end]
 
     @staticmethod
     def _parse_domain_name(data: bytes, offset: int):
@@ -52,7 +54,9 @@ class DNSRequest:
                 offset += 2
                 break
             offset += 1
-            parts.append(data[offset:offset + length].decode("ascii", errors="ignore"))
+            parts.append(
+                data[offset : offset + length].decode("ascii", errors="ignore")
+            )
             offset += length
         return ".".join(parts), offset
 
@@ -85,17 +89,25 @@ class DNSServer:
                         self.socket.sendto(response, client_addr)
                         print(f"<- Resolved '{request.domain_name}' -> {resolved_ip}")
                     else:
-                        response = self._create_error_response(request.id, request.rd, 2)  # SERVFAIL
+                        response = self._create_error_response(
+                            request.id, request.rd, 2
+                        )  # SERVFAIL
                         self.socket.sendto(response, client_addr)
-                        print(f"! Resolution failed for '{request.domain_name}', sent SERVFAIL")
+                        print(
+                            f"! Resolution failed for '{request.domain_name}', sent SERVFAIL"
+                        )
 
                 except DNSValidationError as e:
                     try:
                         req_id = struct.unpack("!H", packet[:2])[0]
                         rd = (struct.unpack("!H", packet[2:4])[0] >> 8) & 1
-                        print(f"! Validation error (RCODE {e.rcode}) from {client_addr[0]}")
+                        print(
+                            f"! Validation error (RCODE {e.rcode}) from {client_addr[0]}"
+                        )
                         if e.rcode != 0:
-                            error_response = self._create_error_response(req_id, rd, e.rcode)
+                            error_response = self._create_error_response(
+                                req_id, rd, e.rcode
+                            )
                             self.socket.sendto(error_response, client_addr)
                     except Exception:
                         pass
@@ -107,7 +119,9 @@ class DNSServer:
 
     def _iterative_resolve(self, query_packet: bytes, domain_name: str):
         current_server = self.ROOT_DNS_IP
-        print(f"Starting iterative resolution for {domain_name} from root {current_server}")
+        print(
+            f"Starting iterative resolution for {domain_name} from root {current_server}"
+        )
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as resolver_socket:
             resolver_socket.settimeout(2.5)
@@ -131,7 +145,9 @@ class DNSServer:
     @staticmethod
     def _parse_remote_response(data: bytes):
         try:
-            _, flags, q_count, an_count, ns_count, ar_count = struct.unpack("!HHHHHH", data[:12])
+            _, flags, q_count, an_count, ns_count, ar_count = struct.unpack(
+                "!HHHHHH", data[:12]
+            )
             if flags & 0x000F:
                 return None, None
 
@@ -142,23 +158,27 @@ class DNSServer:
 
             for _ in range(an_count):
                 offset = DNSServer._skip_name(data, offset)
-                rtype, rclass, _, rlen = struct.unpack("!HHIH", data[offset:offset + 10])
+                rtype, rclass, _, rlen = struct.unpack(
+                    "!HHIH", data[offset : offset + 10]
+                )
                 offset += 10
                 if rtype == 1 and rclass == 1 and rlen == 4:
-                    return socket.inet_ntoa(data[offset:offset + 4]), None
+                    return socket.inet_ntoa(data[offset : offset + 4]), None
                 offset += rlen
 
             for _ in range(ns_count):
                 offset = DNSServer._skip_name(data, offset)
-                _, _, _, rlen = struct.unpack("!HHIH", data[offset:offset + 10])
+                _, _, _, rlen = struct.unpack("!HHIH", data[offset : offset + 10])
                 offset += 10 + rlen
 
             for _ in range(ar_count):
                 offset = DNSServer._skip_name(data, offset)
-                rtype, rclass, _, rlen = struct.unpack("!HHIH", data[offset:offset + 10])
+                rtype, rclass, _, rlen = struct.unpack(
+                    "!HHIH", data[offset : offset + 10]
+                )
                 offset += 10
                 if rtype == 1 and rclass == 1 and rlen == 4:
-                    return None, socket.inet_ntoa(data[offset:offset + 4])
+                    return None, socket.inet_ntoa(data[offset : offset + 4])
                 offset += rlen
 
         except Exception:
@@ -180,7 +200,11 @@ class DNSServer:
         flags = 0x8180 if request.rd else 0x8000
         header = struct.pack("!HHHHHH", request.id, flags, 1, 1, 0, 0)
         ip_bytes = socket.inet_aton(ip_str)
-        answer = request.question_section[-4:] + struct.pack("!HHIH", 1, 1, 300, 4) + ip_bytes
+        answer = (
+            request.question_section[-4:]
+            + struct.pack("!HHIH", 1, 1, 300, 4)
+            + ip_bytes
+        )
         return header + request.question_section + answer
 
     @staticmethod
