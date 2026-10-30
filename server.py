@@ -196,13 +196,15 @@ class DNSServer:
             offset += 1 + length
 
     @staticmethod
-    def _create_success_response(request: DNSRequest, ip_str: str) -> bytes:
+    def _create_success_response(request, ip_str: str) -> bytes:
         flags = 0x8180 if request.rd else 0x8000
         header = struct.pack("!HHHHHH", request.id, flags, 1, 1, 0, 0)
+        name_bytes = request.raw_data[12 : request.question_end - 4]
+        ttl = 300
         ip_bytes = socket.inet_aton(ip_str)
         answer = (
-            request.question_section[-4:]
-            + struct.pack("!HHIH", 1, 1, 300, 4)
+            name_bytes
+            + struct.pack("!HHIH", request.qtype, 1, ttl, len(ip_bytes))
             + ip_bytes
         )
         return header + request.question_section + answer
@@ -210,7 +212,7 @@ class DNSServer:
     @staticmethod
     def _create_error_response(req_id: int, rd: int, rcode: int) -> bytes:
         flags = 0x8000 | (rd << 8) | (rcode & 0xF)
-        return struct.pack("!HHHHHH", req_id, flags, 0, 0, 0, 0)
+        return struct.pack("!HHHHHH", req_id, flags, 1, 0, 0, 0)
 
 
 if __name__ == "__main__":
